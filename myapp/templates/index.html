@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>StreamDrop — Radar Share</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #080c14;
+            --surface: #0f1623;
+            --surface2: #161e2e;
+            --border: rgba(255,255,255,0.07);
+            --accent: #00d4ff;
+            --accent2: #7c3aed;
+            --green: #00e5a0;
+            --text: #e8edf5;
+            --muted: #6b7a99;
+            --danger: #ff4d6d;
+            --card-glow: 0 0 40px rgba(0,212,255,0.08);
+            --radius: 20px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        /* ─── NOISE OVERLAY ─── */
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none; z-index: 9999; opacity: 0.4;
+        }
+
+        /* ─── VIEWS ─── */
+        .view { display: none; min-height: 100vh; width: 100%; position: relative; animation: fadeUp 0.4s ease; }
+        .view.active { display: flex; flex-direction: column; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ─── TOPBAR ─── */
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 28px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(8,12,20,0.85);
+            backdrop-filter: blur(16px);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .logo {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800; font-size: 22px; letter-spacing: -0.5px;
+        }
+        .logo span { color: var(--accent); }
+        .topbar-actions { display: flex; gap: 10px; align-items: center; }
+        .badge {
+            background: var(--surface2); border: 1px solid var(--border);
+            padding: 6px 14px; border-radius: 50px; font-size: 13px;
+            color: var(--muted); font-weight: 500;
+        }
+        .badge.live { color: var(--green); border-color: rgba(0,229,160,0.3); }
+        .badge.live::before { content: '●'; margin-right: 6px; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ─── HOME VIEW ─── */
+        #home-view {
+            background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,212,255,0.1) 0%, transparent 60%),
+                        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(124,58,237,0.08) 0%, transparent 50%),
+                        var(--bg);
+        }
+        .home-content {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 40px 24px; text-align: center; gap: 32px;
+        }
+        .home-eyebrow {
+            font-size: 12px; font-weight: 500; letter-spacing: 3px; text-transform: uppercase;
+            color: var(--accent); opacity: 0.8;
+        }
+        .home-title {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(40px, 8vw, 80px);
+            font-weight: 800; line-height: 1.05; letter-spacing: -2px;
+        }
+        .home-title .highlight {
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .home-sub { font-size: clamp(15px, 2.5vw, 18px); color: var(--muted); max-width: 480px; line-height: 1.6; }
+
+        .role-cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 720px; }
+        .role-card {
+            flex: 1; min-width: 260px; max-width: 340px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 36px 28px;
+            cursor: pointer; transition: all 0.3s ease; text-align: left;
+            position: relative; overflow: hidden;
+        }
+        .role-card::before {
+            content: ''; position: absolute; inset: 0;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .role-card.send::before { background: radial-gradient(circle at 30% 30%, rgba(0,229,160,0.12), transparent 60%); }
+        .role-card.receive::before { background: radial-gradient(circle at 70% 30%, rgba(0,212,255,0.12), transparent 60%); }
+        .role-card:hover { border-color: rgba(255,255,255,0.15); transform: translateY(-4px); box-shadow: var(--card-glow); }
+        .role-card:hover::before { opacity: 1; }
+        .role-icon {
+            width: 56px; height: 56px; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px; margin-bottom: 20px;
+        }
+        .send .role-icon { background: rgba(0,229,160,0.12); }
+        .receive .role-icon { background: rgba(0,212,255,0.12); }
+        .role-card h3 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        .role-card p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+        .role-arrow {
+            position: absolute; bottom: 28px; right: 24px;
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--surface2); font-size: 16px;
+            transition: transform 0.2s;
+        }
+        .role-card:hover .role-arrow { transform: translateX(4px); }
+
+        .features-row {
+            display: flex; gap: 24px; flex-wrap: wrap; justify-content: center;
+            max-width: 640px;
+        }
+        .feat { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+        .feat-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+        /* ─── SHARED LAYOUT ─── */
+        .page-body {
+            flex: 1; display: flex; gap: 0;
+            overflow: hidden; height: calc(100vh - 65px);
+        }
+
+        /* ─── SIDEBAR ─── */
+        .sidebar {
+            width: 380px; min-width: 300px; flex-shrink: 0;
+            background: var(--surface); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; padding: 24px;
+            overflow-y: auto; overflow-x: hidden; gap: 20px;
+        }
+        .sidebar-section-title {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 2px; color: var(--muted); margin-bottom: 4px;
+        }
+
+        /* PIN DISPLAY */
+        .pin-display {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 16px; padding: 20px; text-align: center;
+        }
+        .pin-digits {
+            font-family: 'Syne', sans-serif; font-size: 40px; font-weight: 800;
+            letter-spacing: 8px; color: var(--accent);
+            text-shadow: 0 0 30px rgba(0,212,255,0.4);
+        }
+        .pin-label { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+        /* STATUS CARD */
+        .status-card {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 14px; padding: 16px;
+            display: flex; align-items: center; gap: 14px;
+        }
+        .status-icon {
+            width: 44px; height: 44px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; flex-shrink: 0;
+            background: var(--surface);
+        }
+        .status-info { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+        .status-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .status-sub { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* UPLOAD ZONE */
+        #drop-zone {
+            border: 2px dashed rgba(0,229,160,0.3); border-radius: 16px;
+            padding: 28px 20px; text-align: center; cursor: pointer;
+            transition: all 0.3s; position: relative; background: rgba(0,229,160,0.03);
+            display: none;
+        }
+        #drop-zone.drag-over { border-color: var(--green); background: rgba(0,229,160,0.08); }
+        #drop-zone.has-file { border-style: solid; border-color: var(--green); }
+        .dz-icon { font-size: 36px; margin-bottom: 12px; }
+        .dz-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+        .dz-sub { font-size: 12px; color: var(--muted); }
+        .dz-browse {
+            display: inline-block; margin-top: 14px;
+            padding: 10px 22px; background: var(--green);
+            color: #080c14; border-radius: 50px; font-size: 13px;
+            font-weight: 700; cursor: pointer; transition: opacity 0.2s;
+        }
+        .dz-browse:hover { opacity: 0.85; }
+
+        /* PROGRESS */
+        .progress-wrap { display: none; flex-direction: column; gap: 8px; }
+        .progress-info { display: flex; justify-content: space-between; font-size: 13px; }
+        .progress-bar-track {
+            height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%; border-radius: 99px;
+            background: linear-gradient(90deg, var(--green), var(--accent));
+            transition: width 0.2s; width: 0%;
+        }
+
+        /* FILES LIST */
+        .files-list { display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
+        .file-item {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 14px; padding: 14px 16px;
+            display: flex; align-items: center; gap: 12px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+        .file-thumb {
+            width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+            background: var(--surface); display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        .file-meta { flex: 1; min-width: 0; }
+        .file-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-size { font-size: 11px; color: var(--muted); margin-top: 2px; }
+        .file-actions { display: flex; gap: 8px; }
+        .file-btn {
+            width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 15px;
+            transition: all 0.2s;
+        }
+        .file-btn.download { background: rgba(0,212,255,0.1); color: var(--accent); }
+        .file-btn.download:hover { background: rgba(0,212,255,0.2); }
+        .file-btn.play { background: rgba(0,229,160,0.1); color: var(--green); }
+        .file-btn.play:hover { background: rgba(0,229,160,0.2); }
+
+        /* EXIT BTN */
+        .exit-btn {
+            background: rgba(255,77,109,0.1); border: 1px solid rgba(255,77,109,0.2);
+            color: var(--danger); padding: 10px 18px; border-radius: 10px;
+            font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 8px; justify-content: center;
+        }
+        .exit-btn:hover { background: rgba(255,77,109,0.18); }
+
+        /* ─── RADAR MAIN AREA ─── */
+        .radar-main {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+            background: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(0,212,255,0.04) 0%, transparent 70%);
+        }
+
+        /* RADAR VISUAL */
+        .radar-visual {
+            position: relative; width: 420px; height: 420px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .radar-ring {
+            position: absolute; border-radius: 50%;
+            border: 1px solid rgba(0,212,255,0.15);
+            animation: radarPulse 3s infinite;
+        }
+        .radar-ring:nth-child(1) { width: 120px; height: 120px; animation-delay: 0s; }
+        .radar-ring:nth-child(2) { width: 220px; height: 220px; animation-delay: 0.8s; }
+        .radar-ring:nth-child(3) { width: 320px; height: 320px; animation-delay: 1.6s; }
+        .radar-ring:nth-child(4) { width: 420px; height: 420px; animation-delay: 2.4s; border-style: dashed; }
+        @keyframes radarPulse {
+            0% { opacity: 0.6; } 50% { opacity: 0.15; } 100% { opacity: 0.6; }
+        }
+        .radar-sweep {
+            position: absolute; width: 420px; height: 420px; border-radius: 50%;
+            background: conic-gradient(from -90deg, transparent 0deg, rgba(0,212,255,0.15) 60deg, transparent 90deg);
+            animation: rotateSweep 4s linear infinite;
+        }
+        @keyframes rotateSweep { to { transform: rotate(360deg); } }
+        .radar-center-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: var(--accent); box-shadow: 0 0 20px var(--accent), 0 0 40px rgba(0,212,255,0.4);
+            z-index: 5;
+        }
+
+        /* DEVICE NODE */
+        .device-node {
+            position: absolute; display: flex; flex-direction: column;
+            align-items: center; gap: 8px; z-index: 10; cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .device-node.host { bottom: 0; left: 50%; transform: translateX(-50%); }
+        .device-node.guest {
+            opacity: 0; transform: translate(-50%, -50%) scale(0.5);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .device-node.guest.found { opacity: 1; }
+        .device-node.guest.found:nth-of-type(2) { top: 30%; left: 25%; transform: scale(1); }
+        .device-node.guest.found:nth-of-type(3) { top: 20%; right: 20%; transform: scale(1); }
+        .device-avatar {
+            width: 64px; height: 64px; border-radius: 18px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.08);
+            animation: floatDevice 4s ease-in-out infinite;
+            transition: transform 0.2s;
+        }
+        .device-avatar:hover { transform: scale(1.1); }
+        @keyframes floatDevice {
+            0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); }
+        }
+        .device-label {
+            font-size: 12px; font-weight: 600; color: var(--muted);
+            background: var(--surface); padding: 3px 10px; border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        /* RECEIVER CONNECT MODAL STYLE */
+        .connect-panel {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 16px; padding: 20px; display: none; flex-direction: column; gap: 14px;
+        }
+        .connect-panel.visible { display: flex; }
+        .pin-input-row { display: flex; gap: 10px; width: 100%; }
+        .pin-input {
+            flex: 1; min-width: 0; width: 100%;
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 12px 10px; border-radius: 12px;
+            font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700;
+            letter-spacing: 4px; text-align: center; outline: none; transition: border-color 0.2s;
+        }
+        .pin-input:focus { border-color: var(--accent); }
+        .pin-input::placeholder { font-size: 14px; letter-spacing: 1px; color: var(--muted); font-family: 'DM Sans'; font-weight: 400; }
+        .btn-primary {
+            flex-shrink: 0; min-width: 80px;
+            padding: 12px 20px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: white; border: none; border-radius: 12px; font-weight: 700; font-size: 14px;
+            cursor: pointer; transition: opacity 0.2s; white-space: nowrap;
+        }
+        .btn-primary:hover { opacity: 0.85; }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* TOAST */
+        #toast {
+            position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
+            background: var(--surface2); border: 1px solid var(--border);
+            padding: 12px 24px; border-radius: 50px; font-size: 14px; font-weight: 500;
+            z-index: 9000; transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+            white-space: nowrap; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+        #toast.success { color: var(--green); border-color: rgba(0,229,160,0.3); }
+        #toast.error { color: var(--danger); border-color: rgba(255,77,109,0.3); }
+
+        /* ─── RESPONSIVE ─── */
+        @media (max-width: 768px) {
+            .page-body { flex-direction: column; height: auto; overflow: visible; }
+            .sidebar { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
+            .radar-main { min-height: 340px; }
+            .radar-visual { width: 300px; height: 300px; }
+            .radar-ring:nth-child(1) { width: 80px; height: 80px; }
+            .radar-ring:nth-child(2) { width: 150px; height: 150px; }
+            .radar-ring:nth-child(3) { width: 230px; height: 230px; }
+            .radar-ring:nth-child(4) { width: 300px; height: 300px; }
+            .radar-sweep { width: 300px; height: 300px; }
+            .home-title { letter-spacing: -1px; }
+            .role-cards { gap: 14px; }
+        }
+
+        @media (max-width: 480px) {
+            .topbar { padding: 14px 18px; }
+            .sidebar { padding: 18px; }
+            .pin-digits { font-size: 32px; }
+        }
+
+        /* ─── SCROLLBAR ─── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+        /* ─── WAITING ANIMATION ─── */
+        .waiting-dots span {
+            display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+            background: var(--muted); margin: 0 2px;
+            animation: dotPop 1.4s infinite;
+        }
+        .waiting-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .waiting-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotPop { 0%,80%,100% { transform: scale(0.6); opacity:0.4; } 40% { transform: scale(1); opacity:1; } }
+
+        /* ─── EMPTY STATE ─── */
+        .empty-state { text-align: center; padding: 30px 20px; }
+        .empty-state .empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+        .empty-state p { color: var(--muted); font-size: 13px; }
+    </style>
+</head>
+<body>
+    {% csrf_token %}
+
+    <!-- ══════════════════════ HOME ══════════════════════ -->
+    <div id="home-view" class="view active">
+        <div class="topbar">
+            <div class="logo">Stream<span>Drop</span></div>
+            <div class="topbar-actions">
+                <div class="badge">Radar Share</div>
+            </div>
+        </div>
+        <div class="home-content">
+            <div class="home-eyebrow">No Login · No Cloud · Just Share</div>
+            <h1 class="home-title">Drop files.<br><span class="highlight">Instantly.</span></h1>
+            <p class="home-sub">Transfer files directly between your devices over your local network — fast, private, and effortless.</p>
+
+            <div class="role-cards">
+                <div class="role-card send" onclick="startSend()">
+                    <div class="role-icon">📤</div>
+                    <h3>Send Files</h3>
+                    <p>From your PC or any device. A 6-digit PIN appears — share it with the receiver.</p>
+                    <div class="role-arrow">→</div>
+                </div>
+                <div class="role-card receive" onclick="startReceive()">
+                    <div class="role-icon">📥</div>
+                    <h3>Receive Files</h3>
+                    <p>On mobile or any device. Enter the sender's PIN and files appear instantly.</p>
+                    <div class="role-arrow">→</div>
+                </div>
+            </div>
+
+            <div class="features-row">
+                <div class="feat"><div class="feat-dot"></div> End-to-end LAN transfer</div>
+                <div class="feat"><div class="feat-dot"></div> Optional password lock</div>
+                <div class="feat"><div class="feat-dot"></div> Stream video & audio</div>
+                <div class="feat"><div class="feat-dot"></div> Auto-expiry</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════ SENDER ══════════════════════ -->
+    <div id="sender-view" class="view">
+        <div class="topbar">
+            <div class="logo">Stream<span>Drop</span> <span style="font-family:'DM Sans';font-size:13px;font-weight:400;color:var(--muted);margin-left:8px;">Sender</span></div>
+            <div class="topbar-actions">
+                <div class="badge live" id="sender-status-badge">Waiting for receiver</div>
+            </div>
+        </div>
+        <div class="page-body">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div>
+                    <div class="sidebar-section-title">Your Session PIN</div>
+                    <div class="pin-display">
+                        <div class="pin-digits" id="sender-pin">
+                            <span class="waiting-dots"><span></span><span></span><span></span></span>
+                        </div>
+                        <div class="pin-label">Share this with the receiver</div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="sidebar-section-title">Connection</div>
+                    <div class="status-card" id="sender-connection-card">
+                        <div class="status-icon">📡</div>
+                        <div class="status-info">
+                            <div class="status-title">Scanning radar</div>
+                            <div class="status-sub" id="sender-conn-sub">Waiting for receiver to join</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload zone (shown when connected) -->
+                <div id="drop-zone" ondragover="dzDragOver(event)" ondragleave="dzDragLeave(event)" ondrop="dzDrop(event)" onclick="triggerFileInput()">
+                    <div class="dz-icon">☁️</div>
+                    <div class="dz-title">Drag & Drop your file</div>
+                    <div class="dz-sub">or click to browse</div>
+                    <div class="dz-browse">Choose File</div>
+                    <input type="file" id="file-input" style="display:none" onchange="fileSelected(this)">
+                </div>
+
+                <!-- Upload progress -->
+                <div class="progress-wrap" id="progress-wrap">
+                    <div class="progress-info">
+                        <span id="progress-filename" style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;"></span>
+                        <span id="progress-pct" style="font-size:13px;color:var(--muted);flex-shrink:0;">0%</span>
+                    </div>
+                    <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar"></div></div>
+                </div>
+
+                <div>
+                    <div class="sidebar-section-title">Sent Files</div>
+                    <div class="files-list" id="sender-files-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">📂</div>
+                            <p>No files sent yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="exit-btn" onclick="exitSession()">✕ Exit Session</button>
+            </div>
+
+            <!-- Radar -->
+            <div class="radar-main">
+                <div class="radar-visual">
+                    <div class="radar-ring"></div>
+                    <div class="radar-ring"></div>
+                    <div class="radar-ring"></div>
+                    <div class="radar-ring"></div>
+                    <div class="radar-sweep"></div>
+                    <div class="radar-center-dot"></div>
+
+                    <div class="device-node host" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);">
+                        <div class="device-avatar" style="background: linear-gradient(135deg,#1a2a1f,#0d1f16);">🖥️</div>
+                        <div class="device-label">This Device</div>
+                    </div>
+
+                    <div class="device-node guest" id="guest-node" style="position:absolute;top:28%;left:30%;" onclick="triggerFileInput()">
+                        <div class="device-avatar" style="background: linear-gradient(135deg,#1a1a2e,#0d0d1f);">📱</div>
+                        <div class="device-label">Receiver</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════ RECEIVER ══════════════════════ -->
+    <div id="receiver-view" class="view">
+        <div class="topbar">
+            <div class="logo">Stream<span>Drop</span> <span style="font-family:'DM Sans';font-size:13px;font-weight:400;color:var(--muted);margin-left:8px;">Receiver</span></div>
+            <div class="topbar-actions">
+                <div class="badge live" id="receiver-status-badge">Not connected</div>
+            </div>
+        </div>
+        <div class="page-body">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div>
+                    <div class="sidebar-section-title">Join a Session</div>
+                    <div class="connect-panel visible" id="connect-panel">
+                        <div style="font-size:13px;color:var(--muted);">Enter the 6-digit PIN shown on the sender's screen</div>
+                        <div class="pin-input-row">
+                            <input type="text" class="pin-input" id="pin-input" maxlength="6" placeholder="000000" oninput="this.value=this.value.replace(/\D/g,'')">
+                            <button class="btn-primary" onclick="connectToPC()">Join</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="sidebar-section-title">Connection</div>
+                    <div class="status-card">
+                        <div class="status-icon" id="receiver-status-icon">🔗</div>
+                        <div class="status-info">
+                            <div class="status-title" id="receiver-conn-title">Waiting</div>
+                            <div class="status-sub" id="receiver-conn-sub">Enter PIN to connect</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+                    <div class="sidebar-section-title">Received Files</div>
+                    <div class="files-list" id="receiver-files-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">📭</div>
+                            <p>Files will appear here</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="exit-btn" onclick="exitSession()">✕ Exit Session</button>
+            </div>
+
+            <!-- Radar -->
+            <div class="radar-main">
+                <div class="radar-visual">
+                    <div class="radar-ring"></div>
+                    <div class="radar-ring"></div>
+                    <div class="radar-ring"></div>
+                    <div class="radar-ring"></div>
+                    <div class="radar-sweep"></div>
+                    <div class="radar-center-dot"></div>
+
+                    <div class="device-node host" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);">
+                        <div class="device-avatar" style="background: linear-gradient(135deg,#1a1a2e,#0d0d1f);">📱</div>
+                        <div class="device-label">This Device</div>
+                    </div>
+
+                    <div class="device-node guest" id="sender-node" style="position:absolute;top:28%;left:30%;">
+                        <div class="device-avatar" style="background: linear-gradient(135deg,#1a2a1f,#0d1f16);">🖥️</div>
+                        <div class="device-label">Sender</div>
+                    </div>
+                </div>
+
+                <!-- Radar overlay tip -->
+                <div id="radar-tip" style="position:absolute;bottom:32px;left:50%;transform:translateX(-50%);font-size:13px;color:var(--muted);text-align:center;pointer-events:none;">
+                    Enter the PIN to begin scanning
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast"></div>
+
+    <script>
+        // ── UTILS ──
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        let currentPin = null, isSender = false, pollTimer = null, knownFiles = new Set();
+
+        function $(id) { return document.getElementById(id); }
+
+        function showToast(msg, type = 'success', dur = 3000) {
+            const t = $('toast');
+            t.textContent = (type === 'success' ? '✓ ' : '✕ ') + msg;
+            t.className = 'show ' + type;
+            setTimeout(() => { t.className = ''; }, dur);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+            return (bytes/(1024*1024)).toFixed(1) + ' MB';
+        }
+
+        function getFileIcon(mime) {
+            if (!mime) return '📄';
+            if (mime.startsWith('image/')) return '🖼️';
+            if (mime.startsWith('video/')) return '🎬';
+            if (mime.startsWith('audio/')) return '🎵';
+            if (mime.includes('pdf')) return '📑';
+            if (mime.includes('zip') || mime.includes('archive')) return '🗜️';
+            if (mime.includes('text')) return '📝';
+            return '📄';
+        }
+
+        // ── VIEWS ──
+        function switchView(name) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            $(name + '-view').classList.add('active');
+        }
+
+        function exitSession() {
+            clearInterval(pollTimer); pollTimer = null;
+            currentPin = null; knownFiles.clear();
+            location.reload();
+        }
+
+        // ── HOME ──
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoFileId = urlParams.get('f');
+        if (autoFileId) {
+            // Auto-load as receiver with direct file link
+            window.addEventListener('DOMContentLoaded', () => {
+                startReceive();
+                const list = $('receiver-files-list');
+                list.innerHTML = '';
+                appendFileItem(list, { file_id: autoFileId, filename: 'Shared File', size: 0, mime_type: '' });
+            });
+        }
+
+        // ── SENDER ──
+        function startSend() {
+            switchView('sender');
+            isSender = true;
+            fetch('/room/create/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            }).then(r => r.json()).then(data => {
+                currentPin = data.pin;
+                $('sender-pin').textContent = currentPin;
+                pollTimer = setInterval(pollRoom, 2000);
+            });
+        }
+
+        // ── RECEIVER ──
+        function startReceive() {
+            switchView('receiver');
+            isSender = false;
+        }
+
+        function connectToPC() {
+            const pin = $('pin-input').value.trim();
+            if (pin.length !== 6) { showToast('Enter a valid 6-digit PIN', 'error'); return; }
+
+            fetch('/room/join/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin })
+            }).then(r => r.json()).then(data => {
+                if (data.error) { showToast('Invalid PIN or room expired', 'error'); return; }
+                currentPin = pin;
+                $('receiver-status-badge').textContent = 'Connected ✓';
+                $('receiver-conn-title').textContent = 'Connected!';
+                $('receiver-conn-sub').textContent = 'Waiting for files…';
+                $('receiver-status-icon').textContent = '✅';
+                $('radar-tip').textContent = 'Connected — waiting for files from sender';
+                $('sender-node').classList.add('found');
+                $('connect-panel').classList.remove('visible');
+                pollTimer = setInterval(pollRoom, 2000);
+                showToast('Connected to sender!');
+            }).catch(() => showToast('Connection failed', 'error'));
+        }
+
+        // Allow pressing Enter on pin input
+        $('pin-input') && $('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') connectToPC(); });
+
+        // ── POLL ──
+        function pollRoom() {
+            if (!currentPin) return;
+            fetch(`/room/${currentPin}/status/`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { showToast('Session ended', 'error'); setTimeout(exitSession, 2000); return; }
+
+                    if (data.state === 'connected' && isSender) {
+                        $('guest-node').classList.add('found');
+                        $('drop-zone').style.display = 'block';
+                        $('sender-status-badge').textContent = 'Receiver connected ✓';
+                        $('sender-conn-sub').textContent = 'Drag or click to send a file';
+                    }
+
+                    data.files.forEach(f => {
+                        if (!knownFiles.has(f.file_id)) {
+                            knownFiles.add(f.file_id);
+                            if (!isSender) {
+                                const list = $('receiver-files-list');
+                                if (list.querySelector('.empty-state')) list.innerHTML = '';
+                                appendFileItem(list, f);
+                                showToast(`New file: ${f.filename}`);
+                            } else {
+                                const list = $('sender-files-list');
+                                if (list.querySelector('.empty-state')) list.innerHTML = '';
+                                const div = document.createElement('div');
+                                div.className = 'file-item';
+                                div.innerHTML = `
+                                    <div class="file-thumb">${getFileIcon(f.mime_type)}</div>
+                                    <div class="file-meta">
+                                        <div class="file-name">${escHtml(f.filename)}</div>
+                                        <div class="file-size">${formatBytes(f.size)}</div>
+                                    </div>
+                                    <div class="file-actions">
+                                        <button class="file-btn play" title="Preview" onclick="window.open('/stream/${f.file_id}/','_blank')">▶</button>
+                                    </div>`;
+                                list.appendChild(div);
+                            }
+                        }
+                    });
+                });
+        }
+
+        function appendFileItem(list, f) {
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.innerHTML = `
+                <div class="file-thumb">${getFileIcon(f.mime_type)}</div>
+                <div class="file-meta">
+                    <div class="file-name">${escHtml(f.filename)}</div>
+                    <div class="file-size">${f.size ? formatBytes(f.size) : 'Ready'}</div>
+                </div>
+                <div class="file-actions">
+                    <button class="file-btn play" title="Play/View" onclick="window.open('/stream/${f.file_id}/','_blank')">▶</button>
+                    <button class="file-btn download" title="Download" onclick="downloadFile('${f.file_id}','${escHtml(f.filename)}')">⬇</button>
+                </div>`;
+            list.appendChild(div);
+        }
+
+        function downloadFile(fileId, name) {
+            const a = document.createElement('a');
+            a.href = `/stream/${fileId}/`;
+            a.download = name;
+            a.click();
+        }
+
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // ── DRAG & DROP ──
+        function dzDragOver(e) { e.preventDefault(); $('drop-zone').classList.add('drag-over'); }
+        function dzDragLeave(e) { $('drop-zone').classList.remove('drag-over'); }
+        function dzDrop(e) {
+            e.preventDefault(); $('drop-zone').classList.remove('drag-over');
+            if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+        }
+        function triggerFileInput() { $('file-input').click(); }
+        function fileSelected(input) { if (input.files.length) uploadFile(input.files[0]); }
+
+        // ── UPLOAD ──
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('room_pin', currentPin);
+
+            const pw = $('progress-wrap'); pw.style.display = 'flex';
+            $('progress-filename').textContent = file.name;
+            $('progress-pct').textContent = '0%';
+            $('progress-bar').style.width = '0%';
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload/', true);
+            if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken);
+
+            xhr.upload.onprogress = e => {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    $('progress-bar').style.width = pct + '%';
+                    $('progress-pct').textContent = pct + '%';
+                }
+            };
+            xhr.onload = () => {
+                pw.style.display = 'none';
+                if (xhr.status === 201) {
+                    showToast('File sent to receiver!');
+                    pollRoom();
+                } else {
+                    showToast('Upload failed', 'error');
+                }
+            };
+            xhr.onerror = () => { pw.style.display = 'none'; showToast('Network error', 'error'); };
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>

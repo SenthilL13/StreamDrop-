@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+env/
+venv/
+.env
+db.sqlite3
+media/
+cf-streamdrop/
+cloudflared.exe
+cf.log
+tunnel.log
+cf_url.txt
+*.log
