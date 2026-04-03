@@ -38,11 +38,13 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'myapp',
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -138,4 +140,15 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Ensure we use temporary file uploads for large files
 FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+]
+
+# Cloudflare Global Bridge Configuration
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.pages.dev',
+    'http://*.pages.dev',
+    'https://*.trycloudflare.com',
+    'https://*.workers.dev',
+    'https://*.loca.lt',
 ]

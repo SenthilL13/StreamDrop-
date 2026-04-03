@@ -14,6 +14,8 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
 from rest_framework import status
 from wsgiref.util import FileWrapper
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR')
     return ip
 
+@method_decorator(csrf_exempt, name='dispatch')
 class FileUploadView(APIView):
     parser_classes = [MultiPartParser]
 
@@ -204,6 +207,7 @@ def qr_code_view(request, file_id):
 
 import random
 
+@method_decorator(csrf_exempt, name='dispatch')
 class CreateRoomView(APIView):
     def post(self, request):
         ip = get_client_ip(request)
@@ -216,6 +220,7 @@ class CreateRoomView(APIView):
         cache.set(f"room_{pin}", room_data, timeout=3600)
         return Response({'pin': pin})
 
+@method_decorator(csrf_exempt, name='dispatch')
 class JoinRoomView(APIView):
     def post(self, request):
         pin = request.data.get('pin')

@@ -4,7 +4,7 @@ StreamDrop is a massive, lightning-fast, unlimited file-sharing web application 
 
 ### 🚀 Live Demo Network
 The server is actively bridging globally via Cloudflare Zero Trust Edge:
-👉 **[https://meanwhile-astrology-extends-fleece.trycloudflare.com](https://meanwhile-astrology-extends-fleece.trycloudflare.com)**
+👉 **[https://pushing-innocent-ratings-time.trycloudflare.com](https://pushing-innocent-ratings-time.trycloudflare.com)**
 
 ### ✨ Features
 * **Infinite File Sizes:** Safely share massive 2GB, 10GB, or even 50GB unthrottled files because files temporarily stream directly through the physical host PC disk instead of limited cloud-memory containers.
